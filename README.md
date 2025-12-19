@@ -110,7 +110,55 @@ dashboard.py (Flask on :5000)
 
 ## Protocol
 
-See [SPEC.md](SPEC.md) for the BLE packet format and body composition formulas.
+**Device:** GoodPharm TY5108 body composition scale
+**BLE Name:** `tzc`
+**Manufacturer ID:** `0xA6C0`
+
+### Advertisement Packet Format
+
+| Bytes | Description |
+|-------|-------------|
+| 0-1 | Weight (big-endian, divide by 600 for kg) |
+| 2 | Packet type |
+| 3 | Flags (0x40 = measurement locked) |
+| 4-5 | Impedance (big-endian, divide by 10 for ohms) |
+| 6-7 | User ID |
+| 8 | Status (0x21 = measurement complete) |
+| 9-14 | MAC address |
+
+### Body Composition
+
+Body composition is calculated using standard BIA (Bioelectrical Impedance Analysis) formulas in `decode.py`:
+- Lean Body Mass (LBM) from height²/impedance
+- Body fat % = (weight - LBM) / weight
+- BMR using Mifflin-St Jeor equation
+- BMI, muscle mass, water %, bone mass estimates
+
+### Database Schema
+
+```sql
+CREATE TABLE measurements (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    weight_kg REAL NOT NULL,
+    impedance_raw INTEGER,
+    impedance_ohm REAL,
+    body_fat_pct REAL,
+    fat_mass_kg REAL,
+    lean_mass_kg REAL,
+    body_water_pct REAL,
+    muscle_mass_kg REAL,
+    bone_mass_kg REAL,
+    bmr_kcal INTEGER,
+    bmi REAL
+);
+
+CREATE TABLE raw_packets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    packet_hex TEXT NOT NULL
+);
+```
 
 ## License
 
