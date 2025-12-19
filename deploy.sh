@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 # Deploy scalibur to Raspberry Pi
 # Usage: ./deploy.sh [pi-hostname]
+#
+# Environment variables:
+#   PI_USER - Username on the Pi (default: pi)
+#   PI_DIR  - Installation directory (default: /home/$PI_USER/scalibur)
 
 set -euo pipefail
 
-PI_HOST="${1:-scalibur.local}"
-PI_USER="g"
-PI_DIR="/home/g/scalibur"
+PI_HOST="${1:-raspberrypi.local}"
+PI_USER="${PI_USER:-pi}"
+PI_DIR="${PI_DIR:-/home/${PI_USER}/scalibur}"
 
 echo "Deploying to ${PI_USER}@${PI_HOST}:${PI_DIR}"
 
@@ -34,7 +38,10 @@ fi
 uv sync --no-dev
 
 # Install systemd units if not already installed
+# Note: You must edit the service files first to replace YOUR_USER with your username
 if [ ! -f /etc/systemd/system/scalibur-scanner.service ]; then
+    echo "Installing systemd services..."
+    echo "Make sure you've replaced YOUR_USER in the service files!"
     sudo cp systemd/scalibur-scanner.service /etc/systemd/system/
     sudo cp systemd/scalibur-dashboard.service /etc/systemd/system/
     sudo systemctl daemon-reload

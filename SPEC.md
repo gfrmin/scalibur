@@ -170,11 +170,11 @@ CREATE TABLE measurements (
 ## User Profile Config
 
 ```python
-# config.py
+# config.py (copy from config.example.py)
 PROFILE = {
-    "height_cm": 173,
-    "age": 43,
-    "gender": "male",
+    "height_cm": 170,  # Your height in cm
+    "age": 30,         # Your age
+    "gender": "male",  # "male" or "female"
 }
 
 SCALE_NAME = "tzc"
