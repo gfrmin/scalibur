@@ -4,9 +4,9 @@ After=bluetooth.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/home/pi/scalibur
-ExecStart=/home/pi/.local/bin/uv run python scanner.py
+User=g
+WorkingDirectory=/home/g/scalibur
+ExecStart=/home/g/.local/bin/uv run python scanner.py
 Restart=always
 RestartSec=10
 

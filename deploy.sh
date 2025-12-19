@@ -5,8 +5,8 @@
 set -euo pipefail
 
 PI_HOST="${1:-scalibur.local}"
-PI_USER="pi"
-PI_DIR="/home/pi/scalibur"
+PI_USER="g"
+PI_DIR="/home/g/scalibur"
 
 echo "Deploying to ${PI_USER}@${PI_HOST}:${PI_DIR}"
 
