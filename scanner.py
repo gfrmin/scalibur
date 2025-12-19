@@ -47,14 +47,17 @@ class ScaleScanner:
         if device.name != SCALE_NAME:
             return
 
-        # Check for manufacturer data with our ID
-        if MANUFACTURER_ID not in advertisement_data.manufacturer_data:
+        # Get manufacturer data (accept any manufacturer ID)
+        if not advertisement_data.manufacturer_data:
             return
 
-        manufacturer_data = advertisement_data.manufacturer_data[MANUFACTURER_ID]
+        manufacturer_id, manufacturer_data = next(iter(advertisement_data.manufacturer_data.items()))
 
-        # Decode the packet
-        reading = decode_packet(manufacturer_data)
+        # Always save raw packets for debugging (include mfg_id)
+        db.save_raw_packet(f"{manufacturer_id:04x}:{manufacturer_data.hex()}")
+
+        # Decode the packet (weight is in manufacturer_id, other data in bytes)
+        reading = decode_packet(manufacturer_id, manufacturer_data)
         if reading is None:
             log.warning("Failed to decode packet: %s", manufacturer_data.hex())
             return
@@ -77,9 +80,6 @@ class ScaleScanner:
             reading.weight_kg,
             reading.impedance_ohm,
         )
-
-        # Save raw packet
-        db.save_raw_packet(manufacturer_data.hex())
 
         # Calculate body composition if we have impedance
         if reading.impedance_ohm is not None:

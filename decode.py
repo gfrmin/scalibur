@@ -27,34 +27,37 @@ class BodyComposition:
     bmi: float
 
 
-def decode_packet(manufacturer_data: bytes) -> ScaleReading | None:
+def decode_packet(manufacturer_id: int, manufacturer_data: bytes) -> ScaleReading | None:
     """Decode tzc scale advertisement packet.
 
-    Packet format (14 bytes):
-    - Bytes 0-1: Weight (big-endian), divide by 600 for kg
-    - Byte 2: Packet type
-    - Byte 3: Flags (0x40 = measurement locked)
-    - Bytes 4-5: Impedance raw (big-endian), divide by 10 for ohms
-    - Bytes 6-7: User ID
-    - Byte 8: Status (0x21 = measurement complete)
-    - Bytes 9-14: MAC address
+    The scale encodes weight in the BLE manufacturer ID field (unconventional).
+    Bleak separates this from the data bytes, so we need both.
+
+    Manufacturer ID: Weight (divide by 600 for kg)
+
+    Data bytes (after manufacturer ID is stripped):
+    - Byte 0: Packet type
+    - Byte 1: Flags (0x40 = measurement locked)
+    - Bytes 2-3: Impedance raw (big-endian), divide by 10 for ohms
+    - Bytes 4-5: User ID
+    - Byte 6: Status (0x21 = measurement complete)
+    - Bytes 7-12: MAC address
     """
-    if len(manufacturer_data) < 9:
+    if len(manufacturer_data) < 7:
         return None
 
-    weight_raw = int.from_bytes(manufacturer_data[0:2], "big")
-    weight_kg = weight_raw / 600
+    weight_kg = manufacturer_id / 600
 
-    flags = manufacturer_data[3]
+    flags = manufacturer_data[1]
     is_locked = flags == 0x40
 
-    impedance_raw = int.from_bytes(manufacturer_data[4:6], "big")
+    impedance_raw = int.from_bytes(manufacturer_data[2:4], "big")
     impedance_ohm = impedance_raw / 10 if impedance_raw > 0 else None
 
-    status = manufacturer_data[8]
-    is_complete = status == 0x21
+    status = manufacturer_data[6]
+    is_complete = status == 0x20
 
-    user_id = int.from_bytes(manufacturer_data[6:8], "big")
+    user_id = int.from_bytes(manufacturer_data[4:6], "big")
 
     return ScaleReading(
         weight_kg=weight_kg,
