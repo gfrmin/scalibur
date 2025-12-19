@@ -1,0 +1,14 @@
+[Unit]
+Description=Scalibur Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/scalibur
+ExecStart=/home/pi/.local/bin/uv run python dashboard.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

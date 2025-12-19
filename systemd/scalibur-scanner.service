@@ -1,0 +1,14 @@
+[Unit]
+Description=Scalibur BLE Scale Scanner
+After=bluetooth.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/scalibur
+ExecStart=/home/pi/.local/bin/uv run python scanner.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,14 @@
+[project]
+name = "scalibur"
+version = "0.1.0"
+description = "BLE body composition scale monitor for Raspberry Pi"
+requires-python = ">=3.11"
+dependencies = [
+    "bleak>=0.21.0",
+    "flask>=3.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+]

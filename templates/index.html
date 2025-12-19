@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scalibur</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #0f0f0f;
+            color: #e0e0e0;
+            padding: 20px;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 20px;
+            color: #888;
+        }
+        .hero {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 30px;
+        }
+        .metric {
+            text-align: center;
+        }
+        .metric-value {
+            font-size: 4rem;
+            font-weight: 300;
+            line-height: 1;
+        }
+        .metric-unit {
+            font-size: 1.5rem;
+            color: #666;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-top: 5px;
+        }
+        .weight .metric-value {
+            color: #4fc3f7;
+        }
+        .fat .metric-value {
+            color: #ffb74d;
+        }
+        .chart-container {
+            background: #1a1a1a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+        }
+        th, td {
+            padding: 12px 8px;
+            text-align: left;
+            border-bottom: 1px solid #333;
+        }
+        th {
+            color: #888;
+            font-weight: 500;
+        }
+        td {
+            color: #ccc;
+        }
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <h1>Scalibur</h1>
+
+    {% if latest %}
+    <div class="hero">
+        <div class="metric weight">
+            <div class="metric-value">{{ "%.1f"|format(latest.weight_kg) }}<span class="metric-unit">kg</span></div>
+            <div class="metric-label">Weight</div>
+        </div>
+        {% if latest.body_fat_pct %}
+        <div class="metric fat">
+            <div class="metric-value">{{ "%.1f"|format(latest.body_fat_pct) }}<span class="metric-unit">%</span></div>
+            <div class="metric-label">Body Fat</div>
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="chart-container">
+        <canvas id="weightChart" height="100"></canvas>
+    </div>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Date</th>
+                <th>Weight</th>
+                <th>Fat %</th>
+                <th>Muscle</th>
+                <th>BMI</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in recent %}
+            <tr>
+                <td>{{ m.timestamp[:16] }}</td>
+                <td>{{ "%.1f"|format(m.weight_kg) }} kg</td>
+                <td>{{ "%.1f"|format(m.body_fat_pct) if m.body_fat_pct else "-" }}%</td>
+                <td>{{ "%.1f"|format(m.muscle_mass_kg) if m.muscle_mass_kg else "-" }} kg</td>
+                <td>{{ "%.1f"|format(m.bmi) if m.bmi else "-" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <script>
+        fetch('/api/chart-data')
+            .then(r => r.json())
+            .then(data => {
+                new Chart(document.getElementById('weightChart'), {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Weight (kg)',
+                            data: data.weights,
+                            borderColor: '#4fc3f7',
+                            backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                            fill: true,
+                            tension: 0.3,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: { display: false }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: '#333' },
+                                ticks: { color: '#666' }
+                            },
+                            y: {
+                                grid: { color: '#333' },
+                                ticks: { color: '#666' }
+                            }
+                        }
+                    }
+                });
+            });
+    </script>
+
+    {% else %}
+    <div class="no-data">
+        <p>No measurements yet. Step on the scale to get started.</p>
+    </div>
+    {% endif %}
+</body>
+</html>
