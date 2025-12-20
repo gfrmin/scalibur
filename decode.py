@@ -30,34 +30,29 @@ class BodyComposition:
 def decode_packet(manufacturer_id: int, manufacturer_data: bytes) -> ScaleReading | None:
     """Decode tzc scale advertisement packet.
 
-    The scale encodes weight in the BLE manufacturer ID field (unconventional).
-    Bleak separates this from the data bytes, so we need both.
+    Data bytes layout:
+    - Bytes 0-1: Weight (big-endian), divide by 10 for kg
+    - Bytes 2-3: Impedance (big-endian), divide by 10 for ohms
+    - Bytes 4-5: User ID (big-endian)
+    - Byte 6: Status (0x20 = weight complete, 0x21 = complete with impedance)
+    - Bytes 7+: MAC address (ignored)
 
-    Manufacturer ID: Weight (divide by 600 for kg)
-
-    Data bytes (after manufacturer ID is stripped):
-    - Byte 0: Packet type
-    - Byte 1: Flags (0x40 = measurement locked)
-    - Bytes 2-3: Impedance raw (big-endian), divide by 10 for ohms
-    - Bytes 4-5: User ID
-    - Byte 6: Status (0x21 = measurement complete)
-    - Bytes 7-12: MAC address
+    Note: manufacturer_id varies and is ignored; filtering is by device name "tzc".
     """
     if len(manufacturer_data) < 7:
         return None
 
-    weight_kg = manufacturer_id / 600
-
-    flags = manufacturer_data[1]
-    is_locked = flags == 0x40
+    weight_raw = int.from_bytes(manufacturer_data[0:2], "big")
+    weight_kg = weight_raw / 10
 
     impedance_raw = int.from_bytes(manufacturer_data[2:4], "big")
     impedance_ohm = impedance_raw / 10 if impedance_raw > 0 else None
 
-    status = manufacturer_data[6]
-    is_complete = status == 0x20
-
     user_id = int.from_bytes(manufacturer_data[4:6], "big")
+
+    status = manufacturer_data[6]
+    is_complete = status in (0x20, 0x21)
+    is_locked = is_complete  # locked when complete
 
     return ScaleReading(
         weight_kg=weight_kg,

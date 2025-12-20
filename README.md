@@ -112,19 +112,27 @@ dashboard.py (Flask on :5000)
 
 **Device:** GoodPharm TY5108 body composition scale
 **BLE Name:** `tzc`
-**Manufacturer ID:** `0xA6C0`
+**Manufacturer ID:** varies (ignored; filter by device name only)
 
 ### Advertisement Packet Format
 
+Raw packets are stored as `{manufacturer_id:04x}:{manufacturer_data.hex()}`.
+
+**manufacturer_data bytes:**
+
 | Bytes | Description |
 |-------|-------------|
-| 0-1 | Weight (big-endian, divide by 600 for kg) |
-| 2 | Packet type |
-| 3 | Flags (0x40 = measurement locked) |
-| 4-5 | Impedance (big-endian, divide by 10 for ohms) |
-| 6-7 | User ID |
-| 8 | Status (0x21 = measurement complete) |
-| 9-14 | MAC address |
+| 0-1 | Weight (big-endian, divide by 10 for kg) |
+| 2-3 | Impedance (big-endian, divide by 10 for ohms; 0 = not measured) |
+| 4-5 | User ID (big-endian) |
+| 6 | Status: 0x20 = weight complete, 0x21 = complete with impedance |
+| 7+ | MAC address (ignored) |
+
+**Example:** `74c0:03380000000220fe98000c91d8`
+- Weight: 0x0338 = 824 → 82.4 kg
+- Impedance: 0x0000 = 0 → not measured yet
+- User ID: 0x0002 = 2
+- Status: 0x20 = weight complete (no impedance)
 
 ### Body Composition
 

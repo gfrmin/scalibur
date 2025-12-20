@@ -13,6 +13,7 @@ def get_connection() -> Iterator[sqlite3.Connection]:
     """Context manager for database connections."""
     conn = sqlite3.connect(DATABASE_PATH)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")  # Non-blocking reads
     try:
         yield conn
     finally:
