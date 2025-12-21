@@ -51,7 +51,10 @@ def decode_packet(manufacturer_id: int, manufacturer_data: bytes) -> ScaleReadin
     user_id = int.from_bytes(manufacturer_data[4:6], "big")
 
     status = manufacturer_data[6]
-    is_complete = status in (0x20, 0x21)
+    # Complete when:
+    # - 0x21: weight + impedance both finalized, OR
+    # - 0x20 with impedance=0: weight-only mode (user not barefoot)
+    is_complete = status == 0x21 or (status == 0x20 and impedance_raw == 0)
     is_locked = is_complete  # locked when complete
 
     return ScaleReading(

@@ -4,6 +4,7 @@ from flask import Flask, jsonify, render_template
 
 import db
 from config import BASE_DIR, DASHBOARD_HOST, DASHBOARD_PORT
+from etl import run_etl
 
 app = Flask(__name__, template_folder=BASE_DIR / "templates")
 
@@ -11,6 +12,7 @@ app = Flask(__name__, template_folder=BASE_DIR / "templates")
 @app.route("/")
 def index():
     """Render the dashboard."""
+    run_etl()  # Process any new packets
     latest = db.get_latest_measurement()
     recent = db.get_measurements(limit=10)
     return render_template("index.html", latest=latest, recent=recent)

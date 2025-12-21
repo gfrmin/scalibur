@@ -1,21 +1,12 @@
-"""BLE scanner daemon for tzc scale."""
+"""BLE scanner daemon for tzc scale - saves all raw packets."""
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
 
-from bleak import BleakScanner
-from bleak.backends.device import BLEDevice
-from bleak.backends.scanner import AdvertisementData
+import aioblescan
 
 import db
-from config import (
-    MANUFACTURER_ID,
-    MEASUREMENT_COOLDOWN_SECONDS,
-    PROFILE,
-    SCALE_NAME,
-)
-from decode import calculate_body_composition, decode_packet
+from config import SCALE_NAME
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,96 +15,62 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-class ScaleScanner:
-    """BLE scanner that detects and records scale measurements."""
+def parse_hci_packet(data: bytes) -> tuple[str | None, int | None, bytes | None]:
+    """Parse raw HCI LE advertising packet.
 
-    def __init__(self) -> None:
-        self.last_measurement_time: datetime | None = None
+    Returns (device_name, manufacturer_id, manufacturer_data) or (None, None, None).
+    """
+    if len(data) < 14 or data[0:2] != b'\x04\x3e':
+        return None, None, None
 
-    def is_within_cooldown(self) -> bool:
-        """Check if we're still within the debounce cooldown period."""
-        if self.last_measurement_time is None:
-            return False
-        cooldown = timedelta(seconds=MEASUREMENT_COOLDOWN_SECONDS)
-        return datetime.now() - self.last_measurement_time < cooldown
+    if data[3] != 0x02:  # Not LE Advertising Report
+        return None, None, None
 
-    def handle_detection(
-        self,
-        device: BLEDevice,
-        advertisement_data: AdvertisementData,
-    ) -> None:
-        """Handle BLE advertisement detection."""
-        # Filter by device name
-        if device.name != SCALE_NAME:
-            return
+    adv_len = data[13]
+    adv_data = data[14:14 + adv_len]
 
-        # Get manufacturer data (accept any manufacturer ID)
-        if not advertisement_data.manufacturer_data:
-            return
+    device_name = None
+    manufacturer_id = None
+    manufacturer_data = None
 
-        manufacturer_id, manufacturer_data = next(iter(advertisement_data.manufacturer_data.items()))
+    i = 0
+    while i < len(adv_data):
+        if i + 1 >= len(adv_data):
+            break
+        length = adv_data[i]
+        if length == 0 or i + length >= len(adv_data):
+            break
+        ad_type = adv_data[i + 1]
+        ad_value = adv_data[i + 2:i + 1 + length]
 
-        # Always save raw packets for debugging (include mfg_id)
-        db.save_raw_packet(f"{manufacturer_id:04x}:{manufacturer_data.hex()}")
+        if ad_type == 0x09:  # Complete Local Name
+            try:
+                device_name = ad_value.decode('utf-8')
+            except:
+                pass
+        elif ad_type == 0xFF and len(ad_value) >= 2:  # Manufacturer Specific Data
+            manufacturer_id = int.from_bytes(ad_value[0:2], "little")
+            manufacturer_data = ad_value[2:]
 
-        # Decode the packet (weight is in manufacturer_id, other data in bytes)
-        reading = decode_packet(manufacturer_id, manufacturer_data)
-        if reading is None:
-            log.warning("Failed to decode packet: %s", manufacturer_data.hex())
-            return
+        i += 1 + length
 
-        # Only process complete measurements
-        if not reading.is_complete:
-            log.debug(
-                "Incomplete reading: %.1f kg (waiting for stable)",
-                reading.weight_kg,
-            )
-            return
+    return device_name, manufacturer_id, manufacturer_data
 
-        # Debounce
-        if self.is_within_cooldown():
-            log.debug("Within cooldown period, skipping")
-            return
 
-        log.info(
-            "Complete measurement: %.1f kg, impedance: %s ohms",
-            reading.weight_kg,
-            reading.impedance_ohm,
-        )
+def process_hci_packet(data: bytes) -> None:
+    """Process raw HCI packet - save if from scale."""
+    device_name, manufacturer_id, manufacturer_data = parse_hci_packet(data)
 
-        # Calculate body composition if we have impedance
-        if reading.impedance_ohm is not None:
-            composition = calculate_body_composition(
-                weight_kg=reading.weight_kg,
-                impedance_ohm=reading.impedance_ohm,
-                height_cm=PROFILE["height_cm"],
-                age=PROFILE["age"],
-                gender=PROFILE["gender"],
-            )
-            db.save_measurement(
-                weight_kg=reading.weight_kg,
-                impedance_raw=reading.impedance_raw,
-                impedance_ohm=reading.impedance_ohm,
-                body_fat_pct=composition.body_fat_pct,
-                fat_mass_kg=composition.fat_mass_kg,
-                lean_mass_kg=composition.lean_mass_kg,
-                body_water_pct=composition.body_water_pct,
-                muscle_mass_kg=composition.muscle_mass_kg,
-                bone_mass_kg=composition.bone_mass_kg,
-                bmr_kcal=composition.bmr_kcal,
-                bmi=composition.bmi,
-            )
-            log.info(
-                "Saved with body composition: %.1f%% fat, BMI %.1f",
-                composition.body_fat_pct,
-                composition.bmi,
-            )
-        else:
-            # Weight only (no impedance)
-            db.save_measurement(weight_kg=reading.weight_kg)
-            log.info("Saved weight only (no impedance)")
+    if device_name != SCALE_NAME:
+        return
 
-        self.last_measurement_time = datetime.now()
+    if manufacturer_id is None or manufacturer_data is None:
+        return
+
+    # Save raw packet - that's all we do
+    packet_hex = f"{manufacturer_id:04x}:{manufacturer_data.hex()}"
+    db.save_raw_packet(packet_hex)
+    log.debug("Saved: %s", packet_hex)
 
 
 async def main() -> None:
@@ -121,20 +78,33 @@ async def main() -> None:
     log.info("Initializing database...")
     db.init_db()
 
-    # Load last measurement time from DB for cooldown
-    scanner = ScaleScanner()
-    scanner.last_measurement_time = db.get_last_measurement_time()
-
     log.info("Starting BLE scanner for '%s' scale...", SCALE_NAME)
 
-    async with BleakScanner(detection_callback=scanner.handle_detection):
-        # Run forever
+    try:
+        sock = aioblescan.create_bt_socket(0)
+    except PermissionError:
+        log.error("Permission denied. Need CAP_NET_RAW or root.")
+        raise
+
+    loop = asyncio.get_running_loop()
+    conn, btctrl = await loop._create_connection_transport(
+        sock, aioblescan.BLEScanRequester, None, None
+    )
+
+    btctrl.process = process_hci_packet
+    await btctrl.send_scan_request()
+    log.info("Scanning...")
+
+    try:
         while True:
             await asyncio.sleep(1)
+    finally:
+        await btctrl.stop_scan_request()
+        conn.close()
 
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        log.info("Scanner stopped")
+        log.info("Stopped")

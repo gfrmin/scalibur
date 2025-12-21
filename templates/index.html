@@ -106,7 +106,7 @@
     <table>
         <thead>
             <tr>
-                <th>Date</th>
+                <th><a href="#" id="tz-toggle" style="color: #888; text-decoration: none;">Date <span id="tz-label">(UTC)</span></a></th>
                 <th>Weight</th>
                 <th>Fat %</th>
                 <th>Muscle</th>
@@ -116,7 +116,7 @@
         <tbody>
             {% for m in recent %}
             <tr>
-                <td>{{ m.timestamp[:16] }}</td>
+                <td data-utc="{{ m.timestamp[:19] }}">{{ m.timestamp[:16] }}</td>
                 <td>{{ "%.1f"|format(m.weight_kg) }} kg</td>
                 <td>{{ "%.1f"|format(m.body_fat_pct) if m.body_fat_pct else "-" }}%</td>
                 <td>{{ "%.1f"|format(m.muscle_mass_kg) if m.muscle_mass_kg else "-" }} kg</td>
@@ -161,6 +161,30 @@
                     }
                 });
             });
+
+        // Timezone toggle
+        const tzToggle = document.getElementById('tz-toggle');
+        const tzLabel = document.getElementById('tz-label');
+        if (tzToggle) {
+            const applyTz = () => {
+                const isLocal = localStorage.getItem('tz') === 'local';
+                tzLabel.textContent = isLocal ? '(Local)' : '(UTC)';
+                document.querySelectorAll('td[data-utc]').forEach(td => {
+                    if (isLocal) {
+                        const d = new Date(td.dataset.utc + 'Z');
+                        td.textContent = d.toLocaleString();
+                    } else {
+                        td.textContent = td.dataset.utc.replace('T', ' ');
+                    }
+                });
+            };
+            applyTz();
+            tzToggle.addEventListener('click', e => {
+                e.preventDefault();
+                localStorage.setItem('tz', localStorage.getItem('tz') === 'local' ? 'utc' : 'local');
+                applyTz();
+            });
+        }
     </script>
 
     {% else %}

@@ -14,9 +14,6 @@ PROFILE = {
 SCALE_NAME = "tzc"
 MANUFACTURER_ID = 0x88C0
 
-# Measurement settings
-MEASUREMENT_COOLDOWN_SECONDS = 30
-
 # Database (stored alongside code)
 DATABASE_PATH = BASE_DIR / "measurements.db"
 

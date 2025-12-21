@@ -10,18 +10,16 @@ class TestDecodePacket:
 
     def test_decode_complete_measurement(self):
         """Decode a complete measurement packet."""
-        # Example: weight=82.5kg (82.5*600=49500=0xC15C), impedance=501.9ohm (5019=0x139B)
-        # flags=0x40 (locked), status=0x21 (complete), user_id=2
+        # New layout: weight=82.5kg (825=0x0339), impedance=501.9ohm (5019=0x139B)
+        # user_id=2, status=0x21 (complete with impedance)
         packet = bytes([
-            0xC1, 0x5C,  # weight raw = 49500
-            0x03,        # packet type
-            0x40,        # flags (locked)
-            0x13, 0x9B,  # impedance raw = 5019
+            0x03, 0x39,  # weight = 825 (82.5 kg)
+            0x13, 0x9B,  # impedance = 5019 (501.9 ohm)
             0x00, 0x02,  # user_id = 2
             0x21,        # status (complete)
         ])
 
-        result = decode_packet(packet)
+        result = decode_packet(0, packet)
 
         assert result is not None
         assert result.weight_kg == pytest.approx(82.5, rel=0.01)
@@ -33,46 +31,45 @@ class TestDecodePacket:
 
     def test_decode_incomplete_measurement(self):
         """Decode an incomplete measurement (still weighing)."""
+        # Status 0x20 with impedance > 0 means still measuring
         packet = bytes([
-            0xC0, 0xC8,  # weight raw = 49352
-            0x03,        # packet type
-            0x3E,        # flags (not locked)
-            0x13, 0x99,  # impedance raw = 5017
+            0x03, 0x35,  # weight = 821 (82.1 kg)
+            0x13, 0x99,  # impedance = 5017 (501.7 ohm)
             0x00, 0x02,  # user_id = 2
-            0x20,        # status (not complete)
+            0x20,        # status (not complete - has impedance but status says still measuring)
         ])
 
-        result = decode_packet(packet)
+        result = decode_packet(0, packet)
 
         assert result is not None
         assert result.is_complete is False
         assert result.is_locked is False
 
     def test_decode_no_impedance(self):
-        """Decode packet with no impedance reading."""
+        """Decode packet with no impedance reading (weight-only mode)."""
+        # Status 0x20 with impedance=0 is "complete" (user not barefoot)
         packet = bytes([
-            0xC0, 0xC8,  # weight
-            0x03,        # packet type
-            0x40,        # flags
+            0x03, 0x35,  # weight = 821 (82.1 kg)
             0x00, 0x00,  # no impedance
-            0x00, 0x01,  # user_id
-            0x21,        # status
+            0x00, 0x01,  # user_id = 1
+            0x20,        # status (weight-only complete)
         ])
 
-        result = decode_packet(packet)
+        result = decode_packet(0, packet)
 
         assert result is not None
         assert result.impedance_raw == 0
         assert result.impedance_ohm is None
+        assert result.is_complete is True  # 0x20 + impedance=0 means complete
 
     def test_decode_packet_too_short(self):
         """Return None for packets that are too short."""
-        packet = bytes([0xC0, 0xC8, 0x03])
-        assert decode_packet(packet) is None
+        packet = bytes([0x03, 0x35, 0x00])  # only 3 bytes, need 7
+        assert decode_packet(0, packet) is None
 
     def test_decode_empty_packet(self):
         """Return None for empty packets."""
-        assert decode_packet(b"") is None
+        assert decode_packet(0, b"") is None
 
 
 class TestCalculateBodyComposition:
