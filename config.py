@@ -5,8 +5,8 @@ BASE_DIR = Path(__file__).parent
 
 # User profile for body composition calculations
 PROFILE = {
-    "height_cm": 173,
-    "age": 43,
+    "height_cm": 170,
+    "age": 30,
     "gender": "male",
 }
 
