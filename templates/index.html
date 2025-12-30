@@ -227,7 +227,6 @@
         <h1>Scalibur</h1>
         <div class="controls">
             <select name="profile" hx-get="/" hx-target="body" hx-push-url="true">
-                <option value="">All Profiles</option>
                 {% for p in profiles %}
                 <option value="{{ p.id }}" {% if selected_profile == p.id %}selected{% endif %}>
                     {{ p.name }}

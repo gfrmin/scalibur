@@ -77,20 +77,28 @@ def find_best_reading(session: list[dict]) -> dict | None:
     return best
 
 
-def detect_profile(scale_user_id: int, profiles: list[dict]) -> dict | None:
-    """Find profile matching the scale's user_id bytes.
+def detect_profile(scale_user_id: int, profiles: list[dict]) -> dict:
+    """Find profile matching the scale's user_id bytes, creating one if needed.
 
     Args:
         scale_user_id: The user_id from bytes 4-5 of the BLE packet
         profiles: List of profile dicts from database
 
     Returns:
-        Matching profile dict, or None if no match
+        Matching profile dict (creates new profile if none exists)
     """
     for profile in profiles:
         if profile.get("scale_user_id") == scale_user_id:
             return profile
-    return None
+
+    # Auto-create profile for new user_id
+    profile_id = db.save_profile(
+        name=f"User {scale_user_id}",
+        scale_user_id=scale_user_id,
+    )
+    new_profile = db.get_profile(profile_id)
+    profiles.append(new_profile)  # Add to list for subsequent sessions in same run
+    return new_profile  # type: ignore[return-value]
 
 
 def find_existing_measurement(
@@ -207,13 +215,13 @@ def run_etl() -> dict:
             reading = best["reading"]
             timestamp = best["packet"]["timestamp"]
 
-            # Detect profile from packet's user_id
+            # Detect profile from packet's user_id (auto-creates if new)
             profile = detect_profile(reading.user_id, profiles)
-            profile_id = profile["id"] if profile else None
+            profile_id = profile["id"]
 
-            # Calculate body composition if we have impedance AND a profile
+            # Calculate body composition if we have impedance AND profile has required fields
             composition = None
-            if reading.impedance_ohm and profile:
+            if reading.impedance_ohm and profile.get("height_cm") and profile.get("age") and profile.get("gender"):
                 composition = calculate_body_composition(
                     weight_kg=reading.weight_kg,
                     impedance_ohm=reading.impedance_ohm,

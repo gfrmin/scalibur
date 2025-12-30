@@ -14,13 +14,19 @@ def index():
     """Render the dashboard."""
     run_etl()  # Process any new packets
 
-    # Get profile filter from query param
+    profiles = db.get_profiles()
+
+    # Get profile filter from query param, default to first profile
     profile_param = request.args.get("profile")
-    profile_id = int(profile_param) if profile_param and profile_param.isdigit() else None
+    if profile_param and profile_param.isdigit():
+        profile_id = int(profile_param)
+    elif profiles:
+        profile_id = profiles[0]["id"]
+    else:
+        profile_id = None
 
     latest = db.get_latest_measurement(profile_id=profile_id)
     recent = db.get_measurements(limit=10, profile_id=profile_id)
-    profiles = db.get_profiles()
 
     return render_template(
         "index.html",
@@ -35,7 +41,11 @@ def index():
 def chart_data():
     """Return chart data as JSON."""
     profile_param = request.args.get("profile")
-    profile_id = int(profile_param) if profile_param and profile_param.isdigit() else None
+    if profile_param and profile_param.isdigit():
+        profile_id = int(profile_param)
+    else:
+        profiles = db.get_profiles()
+        profile_id = profiles[0]["id"] if profiles else None
 
     measurements = db.get_measurements_since(days=30, profile_id=profile_id)
     return jsonify(
