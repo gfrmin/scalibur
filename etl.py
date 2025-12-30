@@ -107,7 +107,7 @@ def find_existing_measurement(
     """Find existing measurement within window_seconds of timestamp."""
     row = conn.execute(
         """
-        SELECT id, timestamp, impedance_ohm
+        SELECT id, timestamp, impedance_ohm, profile_id
         FROM measurements
         WHERE ABS(strftime('%s', timestamp) - strftime('%s', ?)) < ?
         ORDER BY ABS(strftime('%s', timestamp) - strftime('%s', ?))
@@ -116,7 +116,7 @@ def find_existing_measurement(
         (timestamp, window_seconds, timestamp),
     ).fetchone()
     if row:
-        return {"id": row[0], "timestamp": row[1], "impedance_ohm": row[2]}
+        return {"id": row[0], "timestamp": row[1], "impedance_ohm": row[2], "profile_id": row[3]}
     return None
 
 
@@ -233,8 +233,10 @@ def run_etl() -> dict:
             # Check for existing measurement in time window
             existing = find_existing_measurement(conn, timestamp)
             if existing:
-                # Update if new reading has impedance but existing doesn't
-                if reading.impedance_ohm and not existing["impedance_ohm"]:
+                # Update if: new impedance data OR missing profile_id (backfill)
+                needs_impedance = reading.impedance_ohm and not existing["impedance_ohm"]
+                needs_profile = existing["profile_id"] is None
+                if needs_impedance or needs_profile:
                     update_measurement(conn, existing["id"], reading, composition, profile_id)
                     measurements_updated += 1
                 # Otherwise skip (already have this measurement)
