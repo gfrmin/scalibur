@@ -1,0 +1,48 @@
+<form {% if profile %}
+      hx-put="/partials/profiles/{{ profile.id }}"
+      {% else %}
+      hx-post="/partials/profiles"
+      {% endif %}
+      hx-target="#profile-list"
+      hx-swap="innerHTML">
+
+    <div class="form-group">
+        <label for="name">Name</label>
+        <input type="text" id="name" name="name" value="{{ profile.name if profile else '' }}" required>
+    </div>
+
+    <div class="form-group">
+        <label for="scale_user_id">Scale User ID (from BLE packet bytes 4-5)</label>
+        <input type="number" id="scale_user_id" name="scale_user_id"
+               value="{{ profile.scale_user_id if profile and profile.scale_user_id else '' }}"
+               placeholder="e.g. 2565">
+    </div>
+
+    <div class="form-group">
+        <label for="height_cm">Height (cm)</label>
+        <input type="number" id="height_cm" name="height_cm"
+               value="{{ profile.height_cm if profile and profile.height_cm else '' }}"
+               placeholder="e.g. 170">
+    </div>
+
+    <div class="form-group">
+        <label for="age">Age</label>
+        <input type="number" id="age" name="age"
+               value="{{ profile.age if profile and profile.age else '' }}"
+               placeholder="e.g. 30">
+    </div>
+
+    <div class="form-group">
+        <label for="gender">Gender</label>
+        <select id="gender" name="gender">
+            <option value="">Select...</option>
+            <option value="male" {% if profile and profile.gender == 'male' %}selected{% endif %}>Male</option>
+            <option value="female" {% if profile and profile.gender == 'female' %}selected{% endif %}>Female</option>
+        </select>
+    </div>
+
+    <div class="form-actions">
+        <button type="button" hx-get="/partials/profiles" hx-target="#profile-list" hx-swap="innerHTML">Cancel</button>
+        <input type="submit" class="btn-primary" value="{{ 'Update' if profile else 'Create' }}">
+    </div>
+</form>

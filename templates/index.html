@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scalibur</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -23,6 +24,32 @@
             font-size: 1.5rem;
             margin-bottom: 20px;
             color: #888;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        select, button, input[type="submit"] {
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 1px solid #333;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+        select:hover, button:hover, input[type="submit"]:hover {
+            border-color: #555;
+        }
+        button, input[type="submit"] {
+            background: #2a2a2a;
         }
         .hero {
             display: flex;
@@ -80,10 +107,136 @@
             padding: 40px;
             color: #666;
         }
+        /* Modal styles */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+        .modal:target {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .modal-content {
+            background: #1a1a1a;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .modal-header h2 {
+            font-size: 1.2rem;
+            color: #e0e0e0;
+        }
+        .close-btn {
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 1.5rem;
+            cursor: pointer;
+            text-decoration: none;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #888;
+            font-size: 0.9rem;
+        }
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            border-radius: 4px;
+            color: #e0e0e0;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+            margin-top: 20px;
+        }
+        .btn-primary {
+            background: #4fc3f7;
+            color: #000;
+            border: none;
+        }
+        .btn-danger {
+            background: #f44336;
+            color: #fff;
+            border: none;
+        }
+        .profile-list {
+            margin-bottom: 20px;
+        }
+        .profile-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #2a2a2a;
+            border-radius: 4px;
+            margin-bottom: 8px;
+        }
+        .profile-item-info {
+            flex: 1;
+        }
+        .profile-item-name {
+            font-weight: 500;
+        }
+        .profile-item-details {
+            font-size: 0.8rem;
+            color: #888;
+        }
+        .profile-item-actions {
+            display: flex;
+            gap: 5px;
+        }
+        .btn-small {
+            padding: 4px 8px;
+            font-size: 0.8rem;
+        }
+        .htmx-indicator {
+            opacity: 0;
+            transition: opacity 200ms ease-in;
+        }
+        .htmx-request .htmx-indicator {
+            opacity: 1;
+        }
     </style>
 </head>
 <body>
-    <h1>Scalibur</h1>
+    <div class="header">
+        <h1>Scalibur</h1>
+        <div class="controls">
+            <select name="profile" hx-get="/" hx-target="body" hx-push-url="true">
+                <option value="">All Profiles</option>
+                {% for p in profiles %}
+                <option value="{{ p.id }}" {% if selected_profile == p.id %}selected{% endif %}>
+                    {{ p.name }}
+                </option>
+                {% endfor %}
+            </select>
+            <a href="#profiles-modal"><button type="button">Manage Profiles</button></a>
+        </div>
+    </div>
 
     {% if latest %}
     <div class="hero">
@@ -107,6 +260,7 @@
         <thead>
             <tr>
                 <th><a href="#" id="tz-toggle" style="color: #888; text-decoration: none;">Date <span id="tz-label">(UTC)</span></a></th>
+                <th>Profile</th>
                 <th>Weight</th>
                 <th>Fat %</th>
                 <th>Muscle</th>
@@ -117,6 +271,7 @@
             {% for m in recent %}
             <tr>
                 <td data-utc="{{ m.timestamp[:19] }}">{{ m.timestamp[:16] }}</td>
+                <td>{{ m.profile_name or "-" }}</td>
                 <td>{{ "%.1f"|format(m.weight_kg) }} kg</td>
                 <td>{{ "%.1f"|format(m.body_fat_pct) if m.body_fat_pct else "-" }}%</td>
                 <td>{{ "%.1f"|format(m.muscle_mass_kg) if m.muscle_mass_kg else "-" }} kg</td>
@@ -127,7 +282,9 @@
     </table>
 
     <script>
-        fetch('/api/chart-data')
+        const profileId = new URLSearchParams(window.location.search).get('profile');
+        const chartUrl = profileId ? `/api/chart-data?profile=${profileId}` : '/api/chart-data';
+        fetch(chartUrl)
             .then(r => r.json())
             .then(data => {
                 new Chart(document.getElementById('weightChart'), {
@@ -192,5 +349,18 @@
         <p>No measurements yet. Step on the scale to get started.</p>
     </div>
     {% endif %}
+
+    <!-- Profiles Modal -->
+    <div id="profiles-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Manage Profiles</h2>
+                <a href="#" class="close-btn">&times;</a>
+            </div>
+            <div id="profile-list" hx-get="/partials/profiles" hx-trigger="load">
+                Loading...
+            </div>
+        </div>
+    </div>
 </body>
 </html>

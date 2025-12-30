@@ -2,8 +2,9 @@
 
 import sqlite3
 from datetime import datetime, timedelta
-from config import DATABASE_PATH, PROFILE
+from config import DATABASE_PATH
 from decode import calculate_body_composition, decode_packet
+import db
 
 
 def get_all_packets(conn: sqlite3.Connection) -> list[dict]:
@@ -76,6 +77,22 @@ def find_best_reading(session: list[dict]) -> dict | None:
     return best
 
 
+def detect_profile(scale_user_id: int, profiles: list[dict]) -> dict | None:
+    """Find profile matching the scale's user_id bytes.
+
+    Args:
+        scale_user_id: The user_id from bytes 4-5 of the BLE packet
+        profiles: List of profile dicts from database
+
+    Returns:
+        Matching profile dict, or None if no match
+    """
+    for profile in profiles:
+        if profile.get("scale_user_id") == scale_user_id:
+            return profile
+    return None
+
+
 def find_existing_measurement(
     conn: sqlite3.Connection, timestamp: str, window_seconds: int = 30
 ) -> dict | None:
@@ -95,17 +112,24 @@ def find_existing_measurement(
     return None
 
 
-def update_measurement(conn: sqlite3.Connection, measurement_id: int, reading, composition) -> None:
+def update_measurement(
+    conn: sqlite3.Connection,
+    measurement_id: int,
+    reading,
+    composition,
+    profile_id: int | None = None,
+) -> None:
     """Update an existing measurement with new data."""
     conn.execute(
         """
         UPDATE measurements SET
-            weight_kg = ?, impedance_raw = ?, impedance_ohm = ?, body_fat_pct = ?,
-            fat_mass_kg = ?, lean_mass_kg = ?, body_water_pct = ?, muscle_mass_kg = ?,
-            bone_mass_kg = ?, bmr_kcal = ?, bmi = ?
+            profile_id = ?, weight_kg = ?, impedance_raw = ?, impedance_ohm = ?,
+            body_fat_pct = ?, fat_mass_kg = ?, lean_mass_kg = ?, body_water_pct = ?,
+            muscle_mass_kg = ?, bone_mass_kg = ?, bmr_kcal = ?, bmi = ?
         WHERE id = ?
         """,
         (
+            profile_id,
             reading.weight_kg,
             reading.impedance_raw if reading.impedance_raw else None,
             reading.impedance_ohm,
@@ -122,18 +146,25 @@ def update_measurement(conn: sqlite3.Connection, measurement_id: int, reading, c
     )
 
 
-def save_measurement(conn: sqlite3.Connection, timestamp: str, reading, composition) -> int:
+def save_measurement(
+    conn: sqlite3.Connection,
+    timestamp: str,
+    reading,
+    composition,
+    profile_id: int | None = None,
+) -> int:
     """Save measurement to database."""
     cursor = conn.execute(
         """
         INSERT INTO measurements (
-            timestamp, weight_kg, impedance_raw, impedance_ohm, body_fat_pct,
-            fat_mass_kg, lean_mass_kg, body_water_pct, muscle_mass_kg,
-            bone_mass_kg, bmr_kcal, bmi
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            timestamp, profile_id, weight_kg, impedance_raw, impedance_ohm,
+            body_fat_pct, fat_mass_kg, lean_mass_kg, body_water_pct,
+            muscle_mass_kg, bone_mass_kg, bmr_kcal, bmi
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             timestamp,
+            profile_id,
             reading.weight_kg,
             reading.impedance_raw if reading.impedance_raw else None,
             reading.impedance_ohm,
@@ -155,6 +186,9 @@ def run_etl() -> dict:
     conn = sqlite3.connect(DATABASE_PATH)
     conn.execute("PRAGMA journal_mode=WAL")
 
+    # Load profiles from database
+    profiles = db.get_profiles()
+
     try:
         packets = get_all_packets(conn)
 
@@ -173,15 +207,19 @@ def run_etl() -> dict:
             reading = best["reading"]
             timestamp = best["packet"]["timestamp"]
 
-            # Calculate body composition if we have impedance
+            # Detect profile from packet's user_id
+            profile = detect_profile(reading.user_id, profiles)
+            profile_id = profile["id"] if profile else None
+
+            # Calculate body composition if we have impedance AND a profile
             composition = None
-            if reading.impedance_ohm:
+            if reading.impedance_ohm and profile:
                 composition = calculate_body_composition(
                     weight_kg=reading.weight_kg,
                     impedance_ohm=reading.impedance_ohm,
-                    height_cm=PROFILE["height_cm"],
-                    age=PROFILE["age"],
-                    gender=PROFILE["gender"],
+                    height_cm=profile["height_cm"],
+                    age=profile["age"],
+                    gender=profile["gender"],
                 )
 
             # Check for existing measurement in time window
@@ -189,11 +227,11 @@ def run_etl() -> dict:
             if existing:
                 # Update if new reading has impedance but existing doesn't
                 if reading.impedance_ohm and not existing["impedance_ohm"]:
-                    update_measurement(conn, existing["id"], reading, composition)
+                    update_measurement(conn, existing["id"], reading, composition, profile_id)
                     measurements_updated += 1
                 # Otherwise skip (already have this measurement)
             else:
-                save_measurement(conn, timestamp, reading, composition)
+                save_measurement(conn, timestamp, reading, composition, profile_id)
                 measurements_created += 1
 
         conn.commit()

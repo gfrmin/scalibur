@@ -30,9 +30,19 @@ def init_db() -> None:
                 packet_hex TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                scale_user_id INTEGER UNIQUE,
+                height_cm INTEGER,
+                age INTEGER,
+                gender TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS measurements (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                profile_id INTEGER,
                 weight_kg REAL NOT NULL,
                 impedance_raw INTEGER,
                 impedance_ohm REAL,
@@ -43,12 +53,114 @@ def init_db() -> None:
                 muscle_mass_kg REAL,
                 bone_mass_kg REAL,
                 bmr_kcal INTEGER,
-                bmi REAL
+                bmi REAL,
+                FOREIGN KEY (profile_id) REFERENCES profiles(id)
             );
 
             CREATE INDEX IF NOT EXISTS idx_measurements_timestamp
             ON measurements(timestamp);
+
+            CREATE INDEX IF NOT EXISTS idx_measurements_profile_id
+            ON measurements(profile_id);
         """)
+        conn.commit()
+
+
+def migrate_db() -> None:
+    """Run database migrations for existing databases."""
+    with get_connection() as conn:
+        # Check if profiles table exists
+        cursor = conn.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='profiles'"
+        )
+        if not cursor.fetchone():
+            conn.execute("""
+                CREATE TABLE profiles (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    scale_user_id INTEGER UNIQUE,
+                    height_cm INTEGER,
+                    age INTEGER,
+                    gender TEXT
+                )
+            """)
+
+        # Check if profile_id column exists in measurements
+        cursor = conn.execute("PRAGMA table_info(measurements)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "profile_id" not in columns:
+            conn.execute("ALTER TABLE measurements ADD COLUMN profile_id INTEGER")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_measurements_profile_id ON measurements(profile_id)"
+            )
+
+        conn.commit()
+
+
+# Profile CRUD functions
+def get_profiles() -> list[dict]:
+    """Get all profiles."""
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM profiles ORDER BY id"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_profile(profile_id: int) -> dict | None:
+    """Get a single profile by ID."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM profiles WHERE id = ?", (profile_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def get_profile_by_scale_user_id(scale_user_id: int) -> dict | None:
+    """Get a profile by its scale_user_id."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM profiles WHERE scale_user_id = ?", (scale_user_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_profile(
+    name: str,
+    scale_user_id: int | None = None,
+    height_cm: int | None = None,
+    age: int | None = None,
+    gender: str | None = None,
+    profile_id: int | None = None,
+) -> int:
+    """Create or update a profile. Returns the profile ID."""
+    with get_connection() as conn:
+        if profile_id:
+            conn.execute(
+                """
+                UPDATE profiles SET name = ?, scale_user_id = ?, height_cm = ?, age = ?, gender = ?
+                WHERE id = ?
+                """,
+                (name, scale_user_id, height_cm, age, gender, profile_id),
+            )
+            conn.commit()
+            return profile_id
+        else:
+            cursor = conn.execute(
+                """
+                INSERT INTO profiles (name, scale_user_id, height_cm, age, gender)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (name, scale_user_id, height_cm, age, gender),
+            )
+            conn.commit()
+            return cursor.lastrowid or 0
+
+
+def delete_profile(profile_id: int) -> None:
+    """Delete a profile."""
+    with get_connection() as conn:
+        conn.execute("DELETE FROM profiles WHERE id = ?", (profile_id,))
         conn.commit()
 
 
@@ -104,37 +216,85 @@ def save_measurement(
         return cursor.lastrowid or 0
 
 
-def get_latest_measurement() -> dict | None:
-    """Get the most recent measurement."""
+def get_latest_measurement(profile_id: int | None = None) -> dict | None:
+    """Get the most recent measurement, optionally filtered by profile."""
     with get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM measurements ORDER BY timestamp DESC LIMIT 1"
-        ).fetchone()
+        if profile_id is not None:
+            row = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                WHERE m.profile_id = ?
+                ORDER BY m.timestamp DESC LIMIT 1
+                """,
+                (profile_id,),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                ORDER BY m.timestamp DESC LIMIT 1
+                """
+            ).fetchone()
         return dict(row) if row else None
 
 
-def get_measurements(limit: int = 10) -> list[dict]:
-    """Get recent measurements, newest first."""
+def get_measurements(limit: int = 10, profile_id: int | None = None) -> list[dict]:
+    """Get recent measurements, newest first, optionally filtered by profile."""
     with get_connection() as conn:
-        rows = conn.execute(
-            "SELECT * FROM measurements ORDER BY timestamp DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
+        if profile_id is not None:
+            rows = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                WHERE m.profile_id = ?
+                ORDER BY m.timestamp DESC LIMIT ?
+                """,
+                (profile_id, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                ORDER BY m.timestamp DESC LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
         return [dict(row) for row in rows]
 
 
-def get_measurements_since(days: int = 30) -> list[dict]:
+def get_measurements_since(days: int = 30, profile_id: int | None = None) -> list[dict]:
     """Get measurements from the last N days, oldest first (for charting)."""
     cutoff = datetime.now() - timedelta(days=days)
     with get_connection() as conn:
-        rows = conn.execute(
-            """
-            SELECT * FROM measurements
-            WHERE timestamp >= ?
-            ORDER BY timestamp ASC
-            """,
-            (cutoff.isoformat(),),
-        ).fetchall()
+        if profile_id is not None:
+            rows = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                WHERE m.timestamp >= ? AND m.profile_id = ?
+                ORDER BY m.timestamp ASC
+                """,
+                (cutoff.isoformat(), profile_id),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT m.*, p.name as profile_name
+                FROM measurements m
+                LEFT JOIN profiles p ON m.profile_id = p.id
+                WHERE m.timestamp >= ?
+                ORDER BY m.timestamp ASC
+                """,
+                (cutoff.isoformat(),),
+            ).fetchall()
         return [dict(row) for row in rows]
 
 

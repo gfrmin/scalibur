@@ -1,0 +1,34 @@
+<div class="profile-list">
+    {% if profiles %}
+    {% for p in profiles %}
+    <div class="profile-item">
+        <div class="profile-item-info">
+            <div class="profile-item-name">{{ p.name }}</div>
+            <div class="profile-item-details">
+                {% if p.scale_user_id %}Scale ID: {{ p.scale_user_id }} | {% endif %}
+                {% if p.height_cm %}{{ p.height_cm }}cm{% endif %}
+                {% if p.age %} | {{ p.age }}yo{% endif %}
+                {% if p.gender %} | {{ p.gender }}{% endif %}
+            </div>
+        </div>
+        <div class="profile-item-actions">
+            <button class="btn-small"
+                    hx-get="/partials/profile-form/{{ p.id }}"
+                    hx-target="#profile-list"
+                    hx-swap="innerHTML">Edit</button>
+            <button class="btn-small btn-danger"
+                    hx-delete="/partials/profiles/{{ p.id }}"
+                    hx-target="#profile-list"
+                    hx-swap="innerHTML"
+                    hx-confirm="Delete profile '{{ p.name }}'?">Delete</button>
+        </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color: #888; margin-bottom: 15px;">No profiles yet.</p>
+    {% endif %}
+</div>
+
+<button hx-get="/partials/profile-form" hx-target="#profile-list" hx-swap="innerHTML">
+    Add Profile
+</button>
