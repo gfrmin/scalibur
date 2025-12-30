@@ -77,28 +77,22 @@ def find_best_reading(session: list[dict]) -> dict | None:
     return best
 
 
-def detect_profile(scale_user_id: int, profiles: list[dict]) -> dict:
-    """Find profile matching the scale's user_id bytes, creating one if needed.
+def detect_profile(weight_kg: float, profiles: list[dict]) -> dict | None:
+    """Find profile where weight falls within min/max range.
 
     Args:
-        scale_user_id: The user_id from bytes 4-5 of the BLE packet
+        weight_kg: The measured weight
         profiles: List of profile dicts from database
 
     Returns:
-        Matching profile dict (creates new profile if none exists)
+        Matching profile dict, or None if no profile matches
     """
     for profile in profiles:
-        if profile.get("scale_user_id") == scale_user_id:
+        min_w = profile.get("min_weight_kg")
+        max_w = profile.get("max_weight_kg")
+        if min_w is not None and max_w is not None and min_w <= weight_kg <= max_w:
             return profile
-
-    # Auto-create profile for new user_id
-    profile_id = db.save_profile(
-        name=f"User {scale_user_id}",
-        scale_user_id=scale_user_id,
-    )
-    new_profile = db.get_profile(profile_id)
-    profiles.append(new_profile)  # Add to list for subsequent sessions in same run
-    return new_profile  # type: ignore[return-value]
+    return None
 
 
 def find_existing_measurement(
@@ -215,13 +209,13 @@ def run_etl() -> dict:
             reading = best["reading"]
             timestamp = best["packet"]["timestamp"]
 
-            # Detect profile from packet's user_id (auto-creates if new)
-            profile = detect_profile(reading.user_id, profiles)
-            profile_id = profile["id"]
+            # Detect profile by weight range
+            profile = detect_profile(reading.weight_kg, profiles)
+            profile_id = profile["id"] if profile else None
 
-            # Calculate body composition if we have impedance AND profile has required fields
+            # Calculate body composition if we have impedance AND a complete profile
             composition = None
-            if reading.impedance_ohm and profile.get("height_cm") and profile.get("age") and profile.get("gender"):
+            if reading.impedance_ohm and profile and profile.get("height_cm") and profile.get("age") and profile.get("gender"):
                 composition = calculate_body_composition(
                     weight_kg=reading.weight_kg,
                     impedance_ohm=reading.impedance_ohm,

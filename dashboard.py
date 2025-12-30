@@ -74,7 +74,8 @@ def create_profile():
 
     profile_id = db.save_profile(
         name=data["name"],
-        scale_user_id=data.get("scale_user_id"),
+        min_weight_kg=data.get("min_weight_kg"),
+        max_weight_kg=data.get("max_weight_kg"),
         height_cm=data.get("height_cm"),
         age=data.get("age"),
         gender=data.get("gender"),
@@ -104,7 +105,8 @@ def update_profile(profile_id: int):
 
     db.save_profile(
         name=data["name"],
-        scale_user_id=data.get("scale_user_id"),
+        min_weight_kg=data.get("min_weight_kg"),
+        max_weight_kg=data.get("max_weight_kg"),
         height_cm=data.get("height_cm"),
         age=data.get("age"),
         gender=data.get("gender"),
@@ -145,7 +147,8 @@ def partials_create_profile():
     """Create profile and return updated list."""
     db.save_profile(
         name=request.form["name"],
-        scale_user_id=int(request.form["scale_user_id"]) if request.form.get("scale_user_id") else None,
+        min_weight_kg=float(request.form["min_weight_kg"]) if request.form.get("min_weight_kg") else None,
+        max_weight_kg=float(request.form["max_weight_kg"]) if request.form.get("max_weight_kg") else None,
         height_cm=int(request.form["height_cm"]) if request.form.get("height_cm") else None,
         age=int(request.form["age"]) if request.form.get("age") else None,
         gender=request.form.get("gender") or None,
@@ -159,7 +162,8 @@ def partials_update_profile(profile_id: int):
     """Update profile and return updated list."""
     db.save_profile(
         name=request.form["name"],
-        scale_user_id=int(request.form["scale_user_id"]) if request.form.get("scale_user_id") else None,
+        min_weight_kg=float(request.form["min_weight_kg"]) if request.form.get("min_weight_kg") else None,
+        max_weight_kg=float(request.form["max_weight_kg"]) if request.form.get("max_weight_kg") else None,
         height_cm=int(request.form["height_cm"]) if request.form.get("height_cm") else None,
         age=int(request.form["age"]) if request.form.get("age") else None,
         gender=request.form.get("gender") or None,

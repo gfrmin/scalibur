@@ -33,7 +33,8 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
-                scale_user_id INTEGER UNIQUE,
+                min_weight_kg REAL,
+                max_weight_kg REAL,
                 height_cm INTEGER,
                 age INTEGER,
                 gender TEXT
@@ -78,12 +79,21 @@ def migrate_db() -> None:
                 CREATE TABLE profiles (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    scale_user_id INTEGER UNIQUE,
+                    min_weight_kg REAL,
+                    max_weight_kg REAL,
                     height_cm INTEGER,
                     age INTEGER,
                     gender TEXT
                 )
             """)
+
+        # Check for weight columns in profiles (migration from scale_user_id)
+        cursor = conn.execute("PRAGMA table_info(profiles)")
+        columns = {row[1] for row in cursor.fetchall()}
+        if "min_weight_kg" not in columns:
+            conn.execute("ALTER TABLE profiles ADD COLUMN min_weight_kg REAL")
+        if "max_weight_kg" not in columns:
+            conn.execute("ALTER TABLE profiles ADD COLUMN max_weight_kg REAL")
 
         # Check if profile_id column exists in measurements
         cursor = conn.execute("PRAGMA table_info(measurements)")
@@ -116,18 +126,10 @@ def get_profile(profile_id: int) -> dict | None:
         return dict(row) if row else None
 
 
-def get_profile_by_scale_user_id(scale_user_id: int) -> dict | None:
-    """Get a profile by its scale_user_id."""
-    with get_connection() as conn:
-        row = conn.execute(
-            "SELECT * FROM profiles WHERE scale_user_id = ?", (scale_user_id,)
-        ).fetchone()
-        return dict(row) if row else None
-
-
 def save_profile(
     name: str,
-    scale_user_id: int | None = None,
+    min_weight_kg: float | None = None,
+    max_weight_kg: float | None = None,
     height_cm: int | None = None,
     age: int | None = None,
     gender: str | None = None,
@@ -138,20 +140,21 @@ def save_profile(
         if profile_id:
             conn.execute(
                 """
-                UPDATE profiles SET name = ?, scale_user_id = ?, height_cm = ?, age = ?, gender = ?
+                UPDATE profiles SET name = ?, min_weight_kg = ?, max_weight_kg = ?,
+                    height_cm = ?, age = ?, gender = ?
                 WHERE id = ?
                 """,
-                (name, scale_user_id, height_cm, age, gender, profile_id),
+                (name, min_weight_kg, max_weight_kg, height_cm, age, gender, profile_id),
             )
             conn.commit()
             return profile_id
         else:
             cursor = conn.execute(
                 """
-                INSERT INTO profiles (name, scale_user_id, height_cm, age, gender)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO profiles (name, min_weight_kg, max_weight_kg, height_cm, age, gender)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (name, scale_user_id, height_cm, age, gender),
+                (name, min_weight_kg, max_weight_kg, height_cm, age, gender),
             )
             conn.commit()
             return cursor.lastrowid or 0

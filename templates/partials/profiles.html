@@ -5,7 +5,7 @@
         <div class="profile-item-info">
             <div class="profile-item-name">{{ p.name }}</div>
             <div class="profile-item-details">
-                {% if p.scale_user_id %}Scale ID: {{ p.scale_user_id }} | {% endif %}
+                {% if p.min_weight_kg and p.max_weight_kg %}{{ p.min_weight_kg }}-{{ p.max_weight_kg }}kg | {% endif %}
                 {% if p.height_cm %}{{ p.height_cm }}cm{% endif %}
                 {% if p.age %} | {{ p.age }}yo{% endif %}
                 {% if p.gender %} | {{ p.gender }}{% endif %}
