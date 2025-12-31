@@ -310,3 +310,53 @@ def get_last_measurement_time() -> datetime | None:
         if row:
             return datetime.fromisoformat(row["timestamp"])
         return None
+
+
+def recalculate_profile_measurements(profile_id: int) -> int:
+    """Recalculate body composition for all measurements of a profile.
+
+    Call this when profile height/age/gender changes.
+    Returns count of updated measurements.
+    """
+    from decode import calculate_body_composition
+
+    profile = get_profile(profile_id)
+    if not profile:
+        return 0
+    if not all([profile.get("height_cm"), profile.get("age"), profile.get("gender")]):
+        return 0
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT id, weight_kg, impedance_ohm FROM measurements "
+            "WHERE profile_id = ? AND impedance_ohm IS NOT NULL",
+            (profile_id,),
+        ).fetchall()
+
+        for row in rows:
+            comp = calculate_body_composition(
+                weight_kg=row["weight_kg"],
+                impedance_ohm=row["impedance_ohm"],
+                height_cm=profile["height_cm"],
+                age=profile["age"],
+                gender=profile["gender"],
+            )
+            conn.execute(
+                """UPDATE measurements SET
+                   body_fat_pct=?, fat_mass_kg=?, lean_mass_kg=?, body_water_pct=?,
+                   muscle_mass_kg=?, bone_mass_kg=?, bmr_kcal=?, bmi=?
+                   WHERE id=?""",
+                (
+                    comp.body_fat_pct,
+                    comp.fat_mass_kg,
+                    comp.lean_mass_kg,
+                    comp.body_water_pct,
+                    comp.muscle_mass_kg,
+                    comp.bone_mass_kg,
+                    comp.bmr_kcal,
+                    comp.bmi,
+                    row["id"],
+                ),
+            )
+        conn.commit()
+        return len(rows)

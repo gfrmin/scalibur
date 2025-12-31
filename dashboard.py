@@ -112,6 +112,7 @@ def update_profile(profile_id: int):
         gender=data.get("gender"),
         profile_id=profile_id,
     )
+    db.recalculate_profile_measurements(profile_id)
     return jsonify({"id": profile_id})
 
 
@@ -169,6 +170,7 @@ def partials_update_profile(profile_id: int):
         gender=request.form.get("gender") or None,
         profile_id=profile_id,
     )
+    db.recalculate_profile_measurements(profile_id)
     profiles = db.get_profiles()
     return render_template("partials/profiles.html", profiles=profiles)
 
