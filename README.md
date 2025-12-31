@@ -2,6 +2,8 @@
 
 BLE body composition scale monitor for Raspberry Pi. Reads weight and impedance data from a GoodPharm TY5108 (BLE name "tzc") scale and displays it on a web dashboard.
 
+![Scalibur Dashboard](docs/scalibur.png)
+
 ## Features
 
 - Continuous BLE scanning for scale advertisements
