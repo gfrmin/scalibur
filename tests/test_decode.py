@@ -71,6 +71,17 @@ class TestDecodePacket:
         """Return None for empty packets."""
         assert decode_packet(0, b"") is None
 
+    def test_decode_weight_below_threshold(self):
+        """Return None for weights below 30kg threshold."""
+        # weight=25.0kg (250=0x00FA), valid format but below threshold
+        packet = bytes([
+            0x00, 0xFA,  # weight = 250 (25.0 kg) - below 30kg threshold
+            0x13, 0x9B,  # impedance = 5019 (501.9 ohm)
+            0x00, 0x02,  # user_id = 2
+            0x21,        # status (complete)
+        ])
+        assert decode_packet(0, packet) is None
+
 
 class TestCalculateBodyComposition:
     """Tests for calculate_body_composition function."""

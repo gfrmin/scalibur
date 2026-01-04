@@ -45,6 +45,10 @@ def decode_packet(manufacturer_id: int, manufacturer_data: bytes) -> ScaleReadin
     weight_raw = int.from_bytes(manufacturer_data[0:2], "big")
     weight_kg = weight_raw / 10
 
+    # Ignore spurious readings below minimum weight threshold
+    if weight_kg < 30:
+        return None
+
     impedance_raw = int.from_bytes(manufacturer_data[2:4], "big")
     impedance_ohm = impedance_raw / 10 if impedance_raw > 0 else None
 
