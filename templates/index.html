@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Scalibur</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <style>
         * {
@@ -290,7 +291,6 @@
                     new Chart(document.getElementById('weightChart'), {
                         type: 'line',
                         data: {
-                            labels: data.labels,
                             datasets: [{
                                 label: 'Weight (kg)',
                                 data: data.weights,
@@ -307,6 +307,13 @@
                             },
                             scales: {
                                 x: {
+                                    type: 'time',
+                                    time: {
+                                        unit: 'day',
+                                        displayFormats: {
+                                            day: 'MMM d'
+                                        }
+                                    },
                                     grid: { color: '#333' },
                                     ticks: { color: '#666' }
                                 },

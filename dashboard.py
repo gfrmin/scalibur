@@ -50,9 +50,8 @@ def chart_data():
     measurements = db.get_measurements_since(days=30, profile_id=profile_id)
     return jsonify(
         {
-            "labels": [m["timestamp"][:10] for m in measurements],
-            "weights": [m["weight_kg"] for m in measurements],
-            "body_fat": [m["body_fat_pct"] for m in measurements],
+            "weights": [{"x": m["timestamp"], "y": m["weight_kg"]} for m in measurements],
+            "body_fat": [{"x": m["timestamp"], "y": m["body_fat_pct"]} for m in measurements],
         }
     )
 
