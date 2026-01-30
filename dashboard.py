@@ -47,7 +47,16 @@ def chart_data():
         profiles = db.get_profiles()
         profile_id = profiles[0]["id"] if profiles else None
 
-    measurements = db.get_measurements_since(days=30, profile_id=profile_id)
+    start = request.args.get("start")
+    end = request.args.get("end")
+
+    if start or end:
+        measurements = db.get_measurements_between(
+            start_date=start, end_date=end, profile_id=profile_id
+        )
+    else:
+        measurements = db.get_measurements_since(days=30, profile_id=profile_id)
+
     return jsonify(
         {
             "weights": [{"x": m["timestamp"], "y": m["weight_kg"]} for m in measurements],
