@@ -167,20 +167,6 @@ def delete_profile(profile_id: int) -> None:
         conn.commit()
 
 
-def delete_measurements(measurement_ids: list[int]) -> int:
-    """Delete measurements by their IDs. Returns count of deleted rows."""
-    if not measurement_ids:
-        return 0
-    with get_connection() as conn:
-        placeholders = ",".join("?" for _ in measurement_ids)
-        cursor = conn.execute(
-            f"DELETE FROM measurements WHERE id IN ({placeholders})",
-            measurement_ids,
-        )
-        conn.commit()
-        return cursor.rowcount
-
-
 def save_raw_packet(packet_hex: str) -> int:
     """Save raw packet data and return the row ID."""
     with get_connection() as conn:
