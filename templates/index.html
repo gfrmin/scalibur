@@ -86,6 +86,48 @@
             padding: 20px;
             margin-bottom: 30px;
         }
+        .date-range-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .date-range-presets {
+            display: flex;
+            gap: 4px;
+        }
+        .preset-btn {
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .preset-btn:hover {
+            border-color: #555;
+        }
+        .preset-btn.active {
+            background: #4fc3f7;
+            color: #000;
+            border-color: #4fc3f7;
+        }
+        .date-range-inputs {
+            display: flex;
+            gap: 6px;
+            align-items: center;
+        }
+        .date-range-inputs input[type="date"] {
+            background: #2a2a2a;
+            border: 1px solid #333;
+            color: #e0e0e0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.8rem;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -253,6 +295,20 @@
     </div>
 
     <div class="chart-container">
+        <div class="date-range-controls">
+            <div class="date-range-presets">
+                <button type="button" class="preset-btn" data-days="7">7d</button>
+                <button type="button" class="preset-btn" data-days="30">30d</button>
+                <button type="button" class="preset-btn" data-days="90">90d</button>
+                <button type="button" class="preset-btn" data-days="365">1y</button>
+                <button type="button" class="preset-btn" data-days="0">All</button>
+            </div>
+            <div class="date-range-inputs">
+                <input type="date" id="date-start" title="Start date">
+                <span style="color: #666;">&ndash;</span>
+                <input type="date" id="date-end" title="End date">
+            </div>
+        </div>
         <canvas id="weightChart" height="100"></canvas>
     </div>
 
@@ -284,47 +340,101 @@
     <script>
         (function() {
             const profileId = new URLSearchParams(window.location.search).get('profile');
-            const chartUrl = profileId ? `/api/chart-data?profile=${profileId}` : '/api/chart-data';
-            fetch(chartUrl)
-                .then(r => r.json())
-                .then(data => {
-                    new Chart(document.getElementById('weightChart'), {
-                        type: 'line',
-                        data: {
-                            datasets: [{
-                                label: 'Weight (kg)',
-                                data: data.weights,
-                                borderColor: '#4fc3f7',
-                                backgroundColor: 'rgba(79, 195, 247, 0.1)',
-                                fill: true,
-                                tension: 0.3,
-                            }]
-                        },
-                        options: {
-                            responsive: true,
-                            plugins: {
-                                legend: { display: false }
+            let weightChart = null;
+            const startInput = document.getElementById('date-start');
+            const endInput = document.getElementById('date-end');
+
+            function buildChartUrl() {
+                const params = new URLSearchParams();
+                if (profileId) params.set('profile', profileId);
+                if (startInput.value) params.set('start', startInput.value);
+                if (endInput.value) params.set('end', endInput.value);
+                return '/api/chart-data' + (params.toString() ? '?' + params.toString() : '');
+            }
+
+            function loadChart() {
+                fetch(buildChartUrl())
+                    .then(r => r.json())
+                    .then(data => {
+                        if (weightChart) {
+                            weightChart.data.datasets[0].data = data.weights;
+                            weightChart.update();
+                            return;
+                        }
+                        weightChart = new Chart(document.getElementById('weightChart'), {
+                            type: 'line',
+                            data: {
+                                datasets: [{
+                                    label: 'Weight (kg)',
+                                    data: data.weights,
+                                    borderColor: '#4fc3f7',
+                                    backgroundColor: 'rgba(79, 195, 247, 0.1)',
+                                    fill: true,
+                                    tension: 0.3,
+                                }]
                             },
-                            scales: {
-                                x: {
-                                    type: 'time',
-                                    time: {
-                                        unit: 'day',
-                                        displayFormats: {
-                                            day: 'MMM d'
-                                        }
-                                    },
-                                    grid: { color: '#333' },
-                                    ticks: { color: '#666' }
+                            options: {
+                                responsive: true,
+                                plugins: {
+                                    legend: { display: false }
                                 },
-                                y: {
-                                    grid: { color: '#333' },
-                                    ticks: { color: '#666' }
+                                scales: {
+                                    x: {
+                                        type: 'time',
+                                        time: {
+                                            unit: 'day',
+                                            displayFormats: {
+                                                day: 'MMM d'
+                                            }
+                                        },
+                                        grid: { color: '#333' },
+                                        ticks: { color: '#666' }
+                                    },
+                                    y: {
+                                        grid: { color: '#333' },
+                                        ticks: { color: '#666' }
+                                    }
                                 }
                             }
-                        }
+                        });
                     });
-                });
+            }
+
+            // Set default: 30 days active
+            function setPresetDays(days) {
+                if (days === 0) {
+                    startInput.value = '';
+                    endInput.value = '';
+                } else {
+                    const end = new Date();
+                    const start = new Date();
+                    start.setDate(start.getDate() - days);
+                    startInput.value = start.toISOString().slice(0, 10);
+                    endInput.value = end.toISOString().slice(0, 10);
+                }
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                const activeBtn = document.querySelector(`.preset-btn[data-days="${days}"]`);
+                if (activeBtn) activeBtn.classList.add('active');
+                loadChart();
+            }
+
+            // Preset buttons
+            document.querySelectorAll('.preset-btn').forEach(btn => {
+                btn.addEventListener('click', () => setPresetDays(parseInt(btn.dataset.days)));
+            });
+
+            // Custom date inputs
+            startInput.addEventListener('change', () => {
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                loadChart();
+            });
+            endInput.addEventListener('change', () => {
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                loadChart();
+            });
+
+            // Initial load: default 30 days
+            setPresetDays(30);
 
             // Timezone toggle
             const tzToggle = document.getElementById('tz-toggle');

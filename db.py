@@ -301,6 +301,46 @@ def get_measurements_since(days: int = 30, profile_id: int | None = None) -> lis
         return [dict(row) for row in rows]
 
 
+def get_measurements_between(
+    start_date: str | None = None,
+    end_date: str | None = None,
+    profile_id: int | None = None,
+) -> list[dict]:
+    """Get measurements between two dates, oldest first (for charting).
+
+    Dates should be ISO format strings (YYYY-MM-DD). If start_date is None,
+    no lower bound is applied. If end_date is None, no upper bound is applied.
+    """
+    conditions = []
+    params: list = []
+
+    if profile_id is not None:
+        conditions.append("m.profile_id = ?")
+        params.append(profile_id)
+    if start_date:
+        conditions.append("m.timestamp >= ?")
+        params.append(start_date)
+    if end_date:
+        # Include the full end day by comparing with the next day
+        conditions.append("m.timestamp < ?")
+        params.append(end_date + "T23:59:59")
+
+    where = "WHERE " + " AND ".join(conditions) if conditions else ""
+
+    with get_connection() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT m.*, p.name as profile_name
+            FROM measurements m
+            LEFT JOIN profiles p ON m.profile_id = p.id
+            {where}
+            ORDER BY m.timestamp ASC
+            """,
+            params,
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
 def get_last_measurement_time() -> datetime | None:
     """Get timestamp of the most recent measurement (for debouncing)."""
     with get_connection() as conn:
