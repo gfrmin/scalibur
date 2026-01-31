@@ -249,6 +249,60 @@ def run_etl() -> dict:
         conn.close()
 
 
+def delete_measurements(measurement_ids: list[int]) -> int:
+    """Delete measurements and their source raw_packets.
+
+    Finds the session of raw_packets that produced each measurement
+    and deletes both the packets and the measurement so the ETL
+    won't recreate them on next run.
+
+    Returns the number of measurements deleted.
+    """
+    if not measurement_ids:
+        return 0
+
+    conn = sqlite3.connect(DATABASE_PATH)
+    conn.execute("PRAGMA journal_mode=WAL")
+    try:
+        # Get timestamps for the measurements being deleted
+        placeholders = ",".join("?" for _ in measurement_ids)
+        rows = conn.execute(
+            f"SELECT id, timestamp FROM measurements WHERE id IN ({placeholders})",
+            measurement_ids,
+        ).fetchall()
+        if not rows:
+            return 0
+
+        timestamps = {row[1] for row in rows}
+
+        # Find raw_packet IDs belonging to the same sessions
+        packets = get_all_packets(conn)
+        sessions = group_into_sessions(packets)
+        packet_ids_to_delete: list[int] = []
+        for session in sessions:
+            session_timestamps = {p["timestamp"] for p in session}
+            if session_timestamps & timestamps:
+                packet_ids_to_delete.extend(p["id"] for p in session)
+
+        # Delete raw_packets
+        if packet_ids_to_delete:
+            ph = ",".join("?" for _ in packet_ids_to_delete)
+            conn.execute(
+                f"DELETE FROM raw_packets WHERE id IN ({ph})",
+                packet_ids_to_delete,
+            )
+
+        # Delete measurements
+        conn.execute(
+            f"DELETE FROM measurements WHERE id IN ({placeholders})",
+            measurement_ids,
+        )
+        conn.commit()
+        return len(rows)
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     stats = run_etl()
     print(f"Processed {stats['packets']} packets")

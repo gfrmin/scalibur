@@ -256,6 +256,9 @@
             padding: 4px 8px;
             font-size: 0.8rem;
         }
+        .table-actions {
+            margin-bottom: 10px;
+        }
         .htmx-indicator {
             opacity: 0;
             transition: opacity 200ms ease-in;
@@ -312,30 +315,40 @@
         <canvas id="weightChart" height="100"></canvas>
     </div>
 
-    <table>
-        <thead>
-            <tr>
-                <th><a href="#" id="tz-toggle" style="color: #888; text-decoration: none;">Date <span id="tz-label">(UTC)</span></a></th>
-                <th>Profile</th>
-                <th>Weight</th>
-                <th>Fat %</th>
-                <th>Muscle</th>
-                <th>BMI</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for m in recent %}
-            <tr>
-                <td data-utc="{{ m.timestamp[:19] }}">{{ m.timestamp[:16] }}</td>
-                <td>{{ m.profile_name or "-" }}</td>
-                <td>{{ "%.1f"|format(m.weight_kg) }} kg</td>
-                <td>{{ "%.1f"|format(m.body_fat_pct) if m.body_fat_pct else "-" }}%</td>
-                <td>{{ "%.1f"|format(m.muscle_mass_kg) if m.muscle_mass_kg else "-" }} kg</td>
-                <td>{{ "%.1f"|format(m.bmi) if m.bmi else "-" }}</td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+    <form id="delete-form" method="POST" action="/delete-measurements">
+        {% if selected_profile %}
+        <input type="hidden" name="profile" value="{{ selected_profile }}">
+        {% endif %}
+        <div class="table-actions" id="table-actions" style="display:none;">
+            <button type="submit" class="btn-danger btn-small" onclick="return confirm('Delete selected measurements?')">Delete selected</button>
+        </div>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width:30px;"><input type="checkbox" id="select-all" title="Select all"></th>
+                    <th><a href="#" id="tz-toggle" style="color: #888; text-decoration: none;">Date <span id="tz-label">(UTC)</span></a></th>
+                    <th>Profile</th>
+                    <th>Weight</th>
+                    <th>Fat %</th>
+                    <th>Muscle</th>
+                    <th>BMI</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for m in recent %}
+                <tr>
+                    <td><input type="checkbox" name="measurement_ids" value="{{ m.id }}" class="measurement-cb"></td>
+                    <td data-utc="{{ m.timestamp[:19] }}">{{ m.timestamp[:16] }}</td>
+                    <td>{{ m.profile_name or "-" }}</td>
+                    <td>{{ "%.1f"|format(m.weight_kg) }} kg</td>
+                    <td>{{ "%.1f"|format(m.body_fat_pct) if m.body_fat_pct else "-" }}%</td>
+                    <td>{{ "%.1f"|format(m.muscle_mass_kg) if m.muscle_mass_kg else "-" }} kg</td>
+                    <td>{{ "%.1f"|format(m.bmi) if m.bmi else "-" }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </form>
 
     <script>
         (function() {
@@ -435,6 +448,32 @@
 
             // Initial load: default 30 days
             setPresetDays(30);
+
+            // Measurement checkboxes
+            const selectAll = document.getElementById('select-all');
+            const tableActions = document.getElementById('table-actions');
+            const checkboxes = document.querySelectorAll('.measurement-cb');
+
+            function updateDeleteBtn() {
+                const anyChecked = document.querySelectorAll('.measurement-cb:checked').length > 0;
+                tableActions.style.display = anyChecked ? '' : 'none';
+            }
+
+            if (selectAll) {
+                selectAll.addEventListener('change', () => {
+                    checkboxes.forEach(cb => cb.checked = selectAll.checked);
+                    updateDeleteBtn();
+                });
+            }
+            checkboxes.forEach(cb => {
+                cb.addEventListener('change', () => {
+                    if (!cb.checked) selectAll.checked = false;
+                    else if (document.querySelectorAll('.measurement-cb:checked').length === checkboxes.length) {
+                        selectAll.checked = true;
+                    }
+                    updateDeleteBtn();
+                });
+            });
 
             // Timezone toggle
             const tzToggle = document.getElementById('tz-toggle');

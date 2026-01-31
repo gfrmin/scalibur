@@ -1,10 +1,10 @@
 """Flask dashboard for scale measurements."""
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, url_for
 
 import db
 from config import BASE_DIR, DASHBOARD_HOST, DASHBOARD_PORT
-from etl import run_etl
+from etl import delete_measurements as etl_delete_measurements, run_etl
 
 app = Flask(__name__, template_folder=BASE_DIR / "templates")
 
@@ -63,6 +63,18 @@ def chart_data():
             "body_fat": [{"x": m["timestamp"], "y": m["body_fat_pct"]} for m in measurements],
         }
     )
+
+
+@app.route("/delete-measurements", methods=["POST"])
+def delete_measurements():
+    """Delete selected measurements and redirect back to dashboard."""
+    ids = request.form.getlist("measurement_ids", type=int)
+    if ids:
+        etl_delete_measurements(ids)
+    profile_param = request.form.get("profile")
+    if profile_param:
+        return redirect(url_for("index", profile=profile_param))
+    return redirect(url_for("index"))
 
 
 # Profile API routes
