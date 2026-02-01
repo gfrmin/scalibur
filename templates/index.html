@@ -120,7 +120,7 @@
             gap: 6px;
             align-items: center;
         }
-        .date-range-inputs input[type="date"] {
+        .date-range-inputs input[type="text"] {
             background: #2a2a2a;
             border: 1px solid #333;
             color: #e0e0e0;
@@ -307,9 +307,9 @@
                 <button type="button" class="preset-btn" data-days="0">All</button>
             </div>
             <div class="date-range-inputs">
-                <input type="date" id="date-start" title="Start date">
+                <input type="text" id="date-start" title="Start date" placeholder="DD/MM/YYYY" maxlength="10">
                 <span style="color: #666;">&ndash;</span>
-                <input type="date" id="date-end" title="End date">
+                <input type="text" id="date-end" title="End date" placeholder="DD/MM/YYYY" maxlength="10">
             </div>
         </div>
         <canvas id="weightChart" height="100"></canvas>
@@ -357,11 +357,24 @@
             const startInput = document.getElementById('date-start');
             const endInput = document.getElementById('date-end');
 
+            function formatDMY(date) {
+                const d = String(date.getDate()).padStart(2, '0');
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                return `${d}/${m}/${date.getFullYear()}`;
+            }
+
+            function parseDMY(s) {
+                const [d, m, y] = s.split('/');
+                return (d && m && y && y.length === 4) ? `${y}-${m}-${d}` : null;
+            }
+
             function buildChartUrl() {
                 const params = new URLSearchParams();
                 if (profileId) params.set('profile', profileId);
-                if (startInput.value) params.set('start', startInput.value);
-                if (endInput.value) params.set('end', endInput.value);
+                const startISO = startInput.value ? parseDMY(startInput.value) : null;
+                const endISO = endInput.value ? parseDMY(endInput.value) : null;
+                if (startISO) params.set('start', startISO);
+                if (endISO) params.set('end', endISO);
                 if (!startInput.value && !endInput.value) params.set('range', 'all');
                 return '/api/chart-data' + (params.toString() ? '?' + params.toString() : '');
             }
@@ -423,8 +436,8 @@
                     const end = new Date();
                     const start = new Date();
                     start.setDate(start.getDate() - days);
-                    startInput.value = start.toISOString().slice(0, 10);
-                    endInput.value = end.toISOString().slice(0, 10);
+                    startInput.value = formatDMY(start);
+                    endInput.value = formatDMY(end);
                 }
                 document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
                 const activeBtn = document.querySelector(`.preset-btn[data-days="${days}"]`);
