@@ -50,7 +50,11 @@ def chart_data():
     start = request.args.get("start")
     end = request.args.get("end")
 
-    if start or end:
+    range_param = request.args.get("range")
+
+    if range_param == "all":
+        measurements = db.get_measurements_between(profile_id=profile_id)
+    elif start or end:
         measurements = db.get_measurements_between(
             start_date=start, end_date=end, profile_id=profile_id
         )

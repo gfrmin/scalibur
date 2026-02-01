@@ -362,6 +362,7 @@
                 if (profileId) params.set('profile', profileId);
                 if (startInput.value) params.set('start', startInput.value);
                 if (endInput.value) params.set('end', endInput.value);
+                if (!startInput.value && !endInput.value) params.set('range', 'all');
                 return '/api/chart-data' + (params.toString() ? '?' + params.toString() : '');
             }
 
