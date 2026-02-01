@@ -308,8 +308,10 @@
             </div>
             <div class="date-range-inputs">
                 <input type="text" id="date-start" title="Start date" placeholder="DD/MM/YYYY" maxlength="10">
+                <input type="date" id="date-start-picker" style="position:absolute;opacity:0;width:0;height:0;">
                 <span style="color: #666;">&ndash;</span>
                 <input type="text" id="date-end" title="End date" placeholder="DD/MM/YYYY" maxlength="10">
+                <input type="date" id="date-end-picker" style="position:absolute;opacity:0;width:0;height:0;">
             </div>
         </div>
         <canvas id="weightChart" height="100"></canvas>
@@ -356,6 +358,8 @@
             let weightChart = null;
             const startInput = document.getElementById('date-start');
             const endInput = document.getElementById('date-end');
+            const startPicker = document.getElementById('date-start-picker');
+            const endPicker = document.getElementById('date-end-picker');
 
             function formatDMY(date) {
                 const d = String(date.getDate()).padStart(2, '0');
@@ -450,7 +454,23 @@
                 btn.addEventListener('click', () => setPresetDays(parseInt(btn.dataset.days)));
             });
 
-            // Custom date inputs
+            // Open native date picker on text input click
+            startInput.addEventListener('click', () => startPicker.showPicker());
+            endInput.addEventListener('click', () => endPicker.showPicker());
+
+            // Sync picker value to text input
+            startPicker.addEventListener('change', () => {
+                startInput.value = startPicker.value ? formatDMY(new Date(startPicker.value + 'T00:00')) : '';
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                loadChart();
+            });
+            endPicker.addEventListener('change', () => {
+                endInput.value = endPicker.value ? formatDMY(new Date(endPicker.value + 'T00:00')) : '';
+                document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
+                loadChart();
+            });
+
+            // Manual typing in text inputs
             startInput.addEventListener('change', () => {
                 document.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('active'));
                 loadChart();
